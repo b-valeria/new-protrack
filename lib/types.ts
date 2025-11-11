@@ -74,3 +74,19 @@ export interface Alerta {
   destinatario_id?: string
   created_at?: string
 }
+
+export interface Movimiento {
+  id: string
+  tipo_movimiento: "Traslado" | "Devolución" | "Pérdida" | "Venta"
+  producto_id: string
+  cantidad: number
+  sede_origen: string | null
+  sede_destino: string | null
+  motivo: string | null
+  precio_venta: number | null
+  registrado_por: string
+  fecha_movimiento: string
+  created_at: string
+  updated_at: string
+}
+

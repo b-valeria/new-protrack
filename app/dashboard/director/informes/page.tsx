@@ -34,6 +34,11 @@ export default async function DirectorInformesPage() {
 
   const { data: contabilidad } = await supabase.from("contabilidad").select("*").order("fecha", { ascending: false })
 
+  const { data: movimientos } = await supabase
+    .from("movimientos")
+    .select("*")
+    .order("fecha_movimiento", { ascending: false })
+
   const { data: productos } = await supabase
     .from("productos")
     .select("id_producto, nombre, categoria, nro_lotes, tamanio_lote, unidades_adquiridas, fecha_entrada")
@@ -95,11 +100,11 @@ export default async function DirectorInformesPage() {
           </TabsContent>
 
           <TabsContent value="traslados" className="space-y-4">
-            <TablaTraslados datos={traslados || []} />
+            <TablaTraslados datos={traslados || []} movimientos={movimientos || []} />
           </TabsContent>
 
           <TabsContent value="contabilidad" className="space-y-4">
-            <TablaContabilidad datos={contabilidad || []} />
+            <TablaContabilidad datos={contabilidad || []} movimientos={movimientos || []} />
           </TabsContent>
 
           <TabsContent value="inventario" className="space-y-4">

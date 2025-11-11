@@ -1,12 +1,10 @@
-import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
+import { redirect } from "next/navigation"
+import { BarChart3, Package, FileText, Users, TrendingUp } from "lucide-react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { TablaRecepcion } from "@/components/reportes/tabla-recepcion"
 import { TablaTraslados } from "@/components/reportes/tabla-traslados"
 import { TablaContabilidad } from "@/components/reportes/tabla-contabilidad"
-import { TablaInventario } from "@/components/reportes/tabla-inventario"
-import { Package, FileText, Users, TrendingUp, BarChart3 } from "lucide-react"
+import { TabsList, TabsTrigger, TabsContent, Tabs } from "@/components/ui/tabs"
 
 export default async function AdministradorInformesPage() {
   const supabase = await createClient()
@@ -25,19 +23,14 @@ export default async function AdministradorInformesPage() {
     redirect("/dashboard")
   }
 
-  const { data: informesRecepcion } = await supabase
-    .from("informes_recepcion")
-    .select("*")
-    .order("created_at", { ascending: false })
-
   const { data: traslados } = await supabase.from("traslados").select("*").order("fecha", { ascending: false })
 
   const { data: contabilidad } = await supabase.from("contabilidad").select("*").order("fecha", { ascending: false })
 
-  const { data: productos } = await supabase
-    .from("productos")
-    .select("id_producto, nombre, categoria, nro_lotes, tamanio_lote, unidades_adquiridas, fecha_entrada")
-    .order("categoria", { ascending: true })
+  const { data: movimientos } = await supabase
+    .from("movimientos")
+    .select("*, productos(nombre)")
+    .order("fecha_movimiento", { ascending: false })
 
   const navigation = [
     {
@@ -74,33 +67,21 @@ export default async function AdministradorInformesPage() {
           <h1 className="text-3xl font-bold" style={{ color: "#0D2646" }}>
             Informes y Reportes
           </h1>
-          <p className="text-muted-foreground">
-            Consulta y descarga informes de recepción, traslados, contabilidad e inventario
-          </p>
+          <p className="text-muted-foreground">Consulta y descarga informes de traslados y contabilidad</p>
         </div>
 
-        <Tabs defaultValue="recepcion" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="recepcion">Recepción</TabsTrigger>
+        <Tabs defaultValue="traslados" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="traslados">Traslados</TabsTrigger>
             <TabsTrigger value="contabilidad">Contabilidad</TabsTrigger>
-            <TabsTrigger value="inventario">Inventario</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="recepcion" className="space-y-4">
-            <TablaRecepcion datos={informesRecepcion || []} />
-          </TabsContent>
-
           <TabsContent value="traslados" className="space-y-4">
-            <TablaTraslados datos={traslados || []} />
+            <TablaTraslados datos={traslados || []} movimientos={movimientos || []} />
           </TabsContent>
 
           <TabsContent value="contabilidad" className="space-y-4">
-            <TablaContabilidad datos={contabilidad || []} />
-          </TabsContent>
-
-          <TabsContent value="inventario" className="space-y-4">
-            <TablaInventario datos={productos || []} />
+            <TablaContabilidad datos={contabilidad || []} movimientos={movimientos || []} />
           </TabsContent>
         </Tabs>
       </div>

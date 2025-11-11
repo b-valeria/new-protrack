@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { MovimientosContent } from "@/components/movimientos-content"
 import { Package, FileText, TrendingUp } from "lucide-react"
 
 export default async function EmpleadoMovimientosPage() {
@@ -20,6 +20,11 @@ export default async function EmpleadoMovimientosPage() {
   if (!usuario || usuario.tipo_usuario !== "Empleado") {
     redirect("/dashboard")
   }
+
+  const { data: productos } = await supabase
+    .from("productos")
+    .select("id, nombre, cantidad_disponible, ubicacion")
+    .order("nombre")
 
   const navigation = [
     {
@@ -46,27 +51,7 @@ export default async function EmpleadoMovimientosPage() {
 
   return (
     <DashboardLayout usuario={usuario} navigation={navigation}>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold" style={{ color: "#0D2646" }}>
-            Registro de Movimientos
-          </h1>
-          <p className="text-muted-foreground">Documenta traslados, devoluciones y pérdidas</p>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Próximamente</CardTitle>
-            <CardDescription>Esta funcionalidad estará disponible pronto</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Aquí podrás registrar movimientos de stock como traslados entre almacenes, devoluciones de productos y
-              pérdidas de inventario.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <MovimientosContent usuario={usuario} productos={productos || []} />
     </DashboardLayout>
   )
 }
