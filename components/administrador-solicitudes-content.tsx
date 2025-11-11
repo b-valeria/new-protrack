@@ -14,6 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CheckCircle, XCircle, Clock, Send, Plus, Truck } from "lucide-react"
 import { SolicitudForm } from "@/components/solicitud-form"
 import type { Solicitud, Usuario, Producto } from "@/lib/types"
+import { usePermisos } from "@/hooks/use-permisos"
+import { PERMISOS } from "@/lib/permisos"
 
 interface AdministradorSolicitudesContentProps {
   usuario: Usuario
@@ -149,6 +151,10 @@ export function AdministradorSolicitudesContent({
 
   const pendientes = solicitudes.filter((s) => s.estado === "Pendiente" && s.solicitado_por !== usuario.id)
 
+  const { tienePermiso, isLoading: isLoadingPermisos } = usePermisos()
+  const puedeAprobarSolicitudes =
+    usuario.tipo_usuario === "Director General" || tienePermiso(PERMISOS.APROBAR_SOLICITUDES)
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -255,34 +261,42 @@ export function AdministradorSolicitudesContent({
                         </div>
                       )}
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => openDialog(solicitud, "aprobar")}
-                        className="bg-green-600 hover:bg-green-700 text-white cursor-pointer"
-                      >
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Aprobar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openDialog(solicitud, "rechazar")}
-                        className="cursor-pointer"
-                      >
-                        <XCircle className="h-4 w-4 mr-2" />
-                        Rechazar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openDialog(solicitud, "delegar")}
-                        className="cursor-pointer"
-                      >
-                        <Send className="h-4 w-4 mr-2" />
-                        Delegar
-                      </Button>
-                    </div>
+                    {!puedeAprobarSolicitudes ? (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+                        <p className="text-sm text-amber-800">
+                          No tienes permiso para aprobar o rechazar solicitudes. Contacta al Director General.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => openDialog(solicitud, "aprobar")}
+                          className="bg-green-600 hover:bg-green-700 text-white cursor-pointer"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Aprobar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openDialog(solicitud, "rechazar")}
+                          className="cursor-pointer"
+                        >
+                          <XCircle className="h-4 w-4 mr-2" />
+                          Rechazar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openDialog(solicitud, "delegar")}
+                          className="cursor-pointer"
+                        >
+                          <Send className="h-4 w-4 mr-2" />
+                          Delegar
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

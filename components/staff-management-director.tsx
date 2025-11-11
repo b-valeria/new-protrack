@@ -20,8 +20,14 @@ import { validatePassword, isPasswordValid } from "@/lib/password-validation"
 import { PasswordRequirementsDisplay } from "@/components/password-requirements"
 import { updateUsuarioPermisos, updateUsuario } from "@/app/actions/usuarios"
 import { useToast } from "@/hooks/use-toast"
+import { usePermisos } from "@/hooks/use-permisos"
+import { PERMISOS } from "@/lib/permisos"
 
-export function StaffManagementDirector() {
+interface StaffManagementDirectorProps {
+  mostrarPermisos?: boolean
+}
+
+export function StaffManagementDirector({ mostrarPermisos = true }: StaffManagementDirectorProps) {
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [showDialog, setShowDialog] = useState(false)
   const [selectedUsuario, setSelectedUsuario] = useState<Usuario | null>(null)
@@ -56,7 +62,23 @@ export function StaffManagementDirector() {
   })
   const [isUpdating, setIsUpdating] = useState(false)
 
+  const { tienePermiso } = usePermisos()
+  const [tipoUsuario, setTipoUsuario] = useState<string>("")
+
   useEffect(() => {
+    async function loadUsuario() {
+      const supabase = createBrowserClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (user) {
+        const { data: usuario } = await supabase.from("usuarios").select("tipo_usuario").eq("id", user.id).single()
+        if (usuario) {
+          setTipoUsuario(usuario.tipo_usuario)
+        }
+      }
+    }
+    loadUsuario()
     loadData()
   }, [])
 
@@ -177,35 +199,34 @@ export function StaffManagementDirector() {
     }
   }
 
-  const handlePermisoChange = (usuarioId: string, permiso: string, checked: boolean) => {
-    setPermisosTemp((prev) => {
-      const currentPermisos = prev[usuarioId] || usuarios.find((u) => u.id === usuarioId)?.permisos || []
-      const newPermisos = checked ? [...currentPermisos, permiso] : currentPermisos.filter((p) => p !== permiso)
-      return { ...prev, [usuarioId]: newPermisos }
-    })
-  }
+  const handlePermisoChange = async (usuarioId: string, permiso: string, checked: boolean) => {
+    const usuario = usuarios.find((u) => u.id === usuarioId)
+    if (!usuario) return
 
-  const handleSavePermisos = async (usuarioId: string) => {
-    const newPermisos = permisosTemp[usuarioId]
-    if (!newPermisos) return
+    let currentPermisos: string[] = []
+    try {
+      if (typeof usuario.permisos === "string") {
+        currentPermisos = JSON.parse(usuario.permisos)
+      } else if (Array.isArray(usuario.permisos)) {
+        currentPermisos = usuario.permisos
+      }
+    } catch {
+      currentPermisos = []
+    }
+
+    const newPermisos = checked ? [...currentPermisos, permiso] : currentPermisos.filter((p) => p !== permiso)
 
     try {
       await updateUsuarioPermisos(usuarioId, newPermisos)
-      setEditingPermisos((prev) => ({ ...prev, [usuarioId]: false }))
-      setPermisosTemp((prev) => {
-        const updated = { ...prev }
-        delete updated[usuarioId]
-        return updated
-      })
       loadData()
       toast({
-        title: "Permisos actualizados",
-        description: "Los permisos han sido actualizados exitosamente",
+        title: "Permiso actualizado",
+        description: checked ? "Permiso concedido exitosamente" : "Permiso revocado exitosamente",
       })
     } catch (error) {
       toast({
         title: "Error",
-        description: "No se pudieron actualizar los permisos",
+        description: "No se pudo actualizar el permiso",
         variant: "destructive",
       })
     }
@@ -253,18 +274,12 @@ export function StaffManagementDirector() {
 
     let currentPermisos: string[] = []
     try {
-      if (permisosTemp[u.id]) {
-        currentPermisos = permisosTemp[u.id]
-      } else if (u.permisos) {
-        if (typeof u.permisos === "string") {
-          currentPermisos = JSON.parse(u.permisos)
-        } else if (Array.isArray(u.permisos)) {
-          currentPermisos = u.permisos
-        }
-      } else {
-        currentPermisos = []
+      if (typeof u.permisos === "string") {
+        currentPermisos = JSON.parse(u.permisos)
+      } else if (Array.isArray(u.permisos)) {
+        currentPermisos = u.permisos
       }
-    } catch (error) {
+    } catch {
       currentPermisos = []
     }
 
@@ -348,7 +363,7 @@ export function StaffManagementDirector() {
                 )}
               </div>
 
-              {u.tipo_usuario === "Administrador" && (
+              {u.tipo_usuario === "Administrador" && mostrarPermisos && (
                 <div className="space-y-3 border-t pt-4">
                   <div className="flex items-center gap-2 mb-3">
                     <Shield className="h-5 w-5" style={{ color: "#487FBB" }} />
@@ -451,6 +466,8 @@ export function StaffManagementDirector() {
     )
   }
 
+  const puedeCrearEmpleados = tipoUsuario === "Director General" || tienePermiso(PERMISOS.CREAR_EMPLEADOS)
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -460,14 +477,27 @@ export function StaffManagementDirector() {
           </h1>
           <p className="text-muted-foreground">Control completo de usuarios del sistema</p>
         </div>
-        <Button
-          onClick={() => setShowDialog(true)}
-          style={{ backgroundColor: "#487FBB", color: "#FFFFFF" }}
-          className="cursor-pointer hover:opacity-90"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Crear Usuario
-        </Button>
+
+        {puedeCrearEmpleados ? (
+          <Button
+            onClick={() => setShowDialog(true)}
+            style={{ backgroundColor: "#487FBB", color: "#FFFFFF" }}
+            className="cursor-pointer hover:opacity-90"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Crear Usuario
+          </Button>
+        ) : (
+          <Button
+            disabled
+            style={{ backgroundColor: "#cccccc", color: "#666666" }}
+            className="cursor-not-allowed"
+            title="No tienes permiso para crear empleados"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Crear Usuario
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

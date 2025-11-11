@@ -22,6 +22,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import Image from "next/image"
+import { usePermisos } from "@/hooks/use-permisos"
+import { PERMISOS } from "@/lib/permisos"
 
 interface Producto {
   id: string
@@ -112,6 +114,27 @@ export function CatalogoProductos() {
     entrada: "",
     imagen: "",
   })
+
+  const { tienePermiso, isLoading: isLoadingPermisos } = usePermisos()
+  const [tipoUsuario, setTipoUsuario] = useState<string>("")
+
+  useEffect(() => {
+    async function loadUsuario() {
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (user) {
+        const { data: usuario } = await supabase.from("usuarios").select("tipo_usuario").eq("id", user.id).single()
+        if (usuario) {
+          setTipoUsuario(usuario.tipo_usuario)
+        }
+      }
+    }
+    loadUsuario()
+  }, [])
+
+  const puedeEditarProductos = tipoUsuario === "Director General" || tienePermiso(PERMISOS.EDITAR_PRODUCTOS)
 
   useEffect(() => {
     loadProductos()
@@ -290,7 +313,6 @@ export function CatalogoProductos() {
     const numValue = Number(value)
     if (isNaN(numValue) || numValue < 0) {
       setValidationErrors((prev) => ({
-        ...prev,
         fieldName: "Entrada Inválida: Números Negativos o Letras.",
       }))
       return false
@@ -838,12 +860,18 @@ export function CatalogoProductos() {
                         <strong>Umbral Máximo:</strong> {selectedProducto.umbral_maximo} unidades
                       </p>
                     </div>
-                    <button
-                      onClick={handleStartEdit}
-                      className="absolute bottom-6 right-6 bg-white rounded-full p-3 cursor-pointer hover:bg-gray-100 transition-colors"
-                    >
-                      <Edit2 className="h-5 w-5" style={{ color: "#0D2646" }} />
-                    </button>
+                    {puedeEditarProductos ? (
+                      <button
+                        onClick={handleStartEdit}
+                        className="absolute bottom-6 right-6 bg-white rounded-full p-3 cursor-pointer hover:bg-gray-100 transition-colors"
+                      >
+                        <Edit2 className="h-5 w-5" style={{ color: "#0D2646" }} />
+                      </button>
+                    ) : (
+                      <div className="absolute bottom-6 right-6 bg-gray-300 rounded-full p-3 cursor-not-allowed opacity-50">
+                        <Edit2 className="h-5 w-5" style={{ color: "#0D2646" }} />
+                      </div>
+                    )}
                   </>
                 )}
               </div>
