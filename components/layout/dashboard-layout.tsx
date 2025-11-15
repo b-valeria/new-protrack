@@ -4,7 +4,7 @@ import { type ReactNode, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Bell, LogOut, Menu, X } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -82,6 +82,7 @@ export function DashboardLayout({ children, usuario, navigation }: DashboardLayo
           </div>
           <div className="flex flex-col items-center text-center gap-3">
             <Avatar className="h-20 w-20">
+              <AvatarImage src={usuario.foto_perfil || undefined} alt={usuario.nombre} />
               <AvatarFallback style={{ backgroundColor: "#487FBB", color: "#FFFFFF", fontSize: "1.5rem" }}>
                 {getInitials(usuario.nombre_completo)}
               </AvatarFallback>

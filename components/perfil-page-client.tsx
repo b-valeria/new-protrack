@@ -3,14 +3,14 @@
 import type React from "react"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { toast } from "sonner"
-import { User, Mail, Phone, MapPin, Briefcase, DollarSign, Upload } from "lucide-react"
+import { User, Mail, Phone, MapPin, Briefcase, DollarSign, Upload } from 'lucide-react'
 import type { Usuario } from "@/lib/types"
 
 interface PerfilPageClientProps {
@@ -50,10 +50,12 @@ export function PerfilPageClient({ usuario: initialUsuario }: PerfilPageClientPr
   const handleSave = async () => {
     setIsSaving(true)
     try {
+      console.log("[v0] Iniciando guardado de perfil")
       let photoUrl = null
 
       // Upload photo if selected
       if (photoFile) {
+        console.log("[v0] Subiendo foto:", photoFile.name)
         const formData = new FormData()
         formData.append("file", photoFile)
 
@@ -62,18 +64,23 @@ export function PerfilPageClient({ usuario: initialUsuario }: PerfilPageClientPr
           body: formData,
         })
 
+        console.log("[v0] Upload response status:", uploadResponse.status)
+
         if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json()
+          console.error("[v0] Error en upload:", errorData)
           throw new Error("Error al subir la foto")
         }
 
         const uploadData = await uploadResponse.json()
         photoUrl = uploadData.url
+        console.log("[v0] Foto subida exitosamente:", photoUrl)
       }
 
       // Update user profile
       const updateData: any = {
         nombre_completo: formData.nombre_completo,
-        correo: formData.correo,
+        correo_electronico: formData.correo,
         telefono: formData.telefono,
         direccion: formData.direccion,
       }
@@ -88,28 +95,39 @@ export function PerfilPageClient({ usuario: initialUsuario }: PerfilPageClientPr
         updateData.foto_perfil = photoUrl
       }
 
-      const response = await fetch(`/api/usuarios/${usuario.id}`, {
-        method: "PATCH",
+      console.log("[v0] Enviando datos al servidor:", updateData)
+
+      const response = await fetch("/api/perfil", {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(updateData),
       })
 
+      console.log("[v0] Response status:", response.status)
+
       if (!response.ok) {
-        throw new Error("Error al actualizar el perfil")
+        const errorData = await response.json()
+        console.error("[v0] Error del servidor:", errorData)
+        throw new Error(errorData.error || "Error al actualizar el perfil")
       }
 
       const updatedUsuario = await response.json()
-      setUsuario(updatedUsuario)
+      console.log("[v0] Perfil actualizado exitosamente:", updatedUsuario)
+      
       setIsEditing(false)
       setPhotoFile(null)
       setPhotoPreview(null)
       toast.success("Perfil actualizado correctamente")
-      router.refresh()
+      
+      console.log("[v0] Recargando página en 1 segundo para actualizar sidebar...")
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
     } catch (error) {
       console.error("[v0] Error updating profile:", error)
-      toast.error("Error al actualizar el perfil")
+      toast.error(error instanceof Error ? error.message : "Error al actualizar el perfil")
     } finally {
       setIsSaving(false)
     }
