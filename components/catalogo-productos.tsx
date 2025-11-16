@@ -2,19 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
-import {
-  Search,
-  Filter,
-  Grid3x3,
-  Plus,
-  Edit2,
-  Upload,
-  FileSpreadsheet,
-  ArrowLeft,
-  X,
-  Check,
-  Trash2,
-} from "lucide-react"
+import { Search, Filter, Grid3x3, Plus, Edit2, Upload, FileSpreadsheet, ArrowLeft, X, Check, Trash2 } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -138,12 +126,12 @@ export function CatalogoProductos() {
 
   useEffect(() => {
     loadProductos()
-    loadFilterOptions() // Cargar opciones de filtros al montar el componente
+    loadFilterOptions()
   }, [])
 
   useEffect(() => {
     filterProductos()
-  }, [searchTerm, productos, activeFilters]) // Actualizar filtros cuando cambian los filtros activos
+  }, [searchTerm, productos, activeFilters])
 
   const loadProductos = async () => {
     const supabase = createClient()
@@ -187,27 +175,22 @@ export function CatalogoProductos() {
   const filterProductos = () => {
     let filtered = productos
 
-    // Filtro por búsqueda de nombre
     if (searchTerm) {
       filtered = filtered.filter((p) => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()))
     }
 
-    // Filtros por tipo
     if (activeFilters.tipo.length > 0) {
       filtered = filtered.filter((p) => p.tipo && activeFilters.tipo.includes(p.tipo))
     }
 
-    // Filtros por categoría ABC
     if (activeFilters.categoria.length > 0) {
       filtered = filtered.filter((p) => p.categoria && activeFilters.categoria.includes(p.categoria))
     }
 
-    // Filtros por proveedor
     if (activeFilters.proveedor.length > 0) {
       filtered = filtered.filter((p) => p.proveedor && activeFilters.proveedor.includes(p.proveedor))
     }
 
-    // Filtros por ubicación
     if (activeFilters.ubicacion.length > 0) {
       filtered = filtered.filter((p) => p.ubicacion && activeFilters.ubicacion.includes(p.ubicacion))
     }
@@ -291,14 +274,87 @@ export function CatalogoProductos() {
 
     setIsUploadingExcel(true)
     try {
-      // Aquí procesarías el Excel y extraerías los datos
-      // Por ahora solo mostramos un mensaje
-      alert("Funcionalidad de importación de Excel próximamente...")
+      console.log("[v0] Starting Excel import:", excelFile.name)
+
+      // Leer el archivo Excel
+      const fileBuffer = await excelFile.arrayBuffer()
+      const XLSX = await import("xlsx")
+      const workbook = XLSX.read(fileBuffer, { type: "array" })
+      
+      // Obtener la primera hoja
+      const sheetName = workbook.SheetNames[0]
+      const worksheet = workbook.Sheets[sheetName]
+      
+      // Convertir a JSON
+      const jsonData = XLSX.utils.sheet_to_json(worksheet)
+      
+      console.log("[v0] Excel data parsed:", jsonData.length, "rows")
+
+      if (jsonData.length === 0) {
+        alert("El archivo Excel está vacío")
+        return
+      }
+
+      // Obtener usuario autenticado
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        throw new Error("Usuario no autenticado")
+      }
+
+      // Procesar cada fila del Excel
+      const productosToInsert = jsonData.map((row: any) => ({
+        nombre: row.nombre || row.Nombre || "",
+        tipo: row.tipo || row.Tipo || null,
+        ubicacion: row.ubicacion || row.Ubicacion || null,
+        proveedor: row.proveedor || row.Proveedor || null,
+        nro_lotes: parseInt(row.nro_lotes || row["Nro Lotes"] || "0") || 0,
+        tamanio_lote: parseInt(row.tamanio_lote || row["Tamaño Lote"] || row["Tamanio Lote"] || "0") || 0,
+        cantidad_disponible: parseInt(row.cantidad_disponible || row["Cantidad Disponible"] || "0") || 0,
+        umbral_minimo: parseInt(row.umbral_minimo || row["Umbral Minimo"] || "0") || 0,
+        umbral_maximo: parseInt(row.umbral_maximo || row["Umbral Maximo"] || "0") || 0,
+        costo_unitario: parseFloat(row.costo_unitario || row["Costo Unitario"] || "0") || 0,
+        fecha_expiracion: row.fecha_expiracion || row["Fecha Expiracion"] || null,
+        entrada: row.entrada || row.Entrada || null,
+        imagen: row.imagen || row.imagen_url || row["Imagen URL"] || null,
+        categoria: null, // Se calculará automáticamente
+        created_by: user.id,
+      }))
+
+      // Filtrar productos sin nombre (obligatorio)
+      const validProductos = productosToInsert.filter(p => p.nombre && p.nombre.trim() !== "")
+
+      if (validProductos.length === 0) {
+        alert("No se encontraron productos válidos. Asegúrate de que la columna 'nombre' tenga valores.")
+        return
+      }
+
+      console.log("[v0] Inserting", validProductos.length, "products")
+
+      // Insertar productos en la base de datos
+      const { data, error } = await supabase
+        .from("productos")
+        .insert(validProductos)
+        .select()
+
+      if (error) {
+        console.error("[v0] Error inserting products:", error)
+        throw new Error(error.message)
+      }
+
+      console.log("[v0] Products inserted successfully:", data?.length)
+
+      // Recalcular categorías ABC
+      await recalcularCategoriasABC()
+
+      alert(`${validProductos.length} productos importados exitosamente`)
       setShowExcelDialog(false)
       setExcelFile(null)
+      loadProductos()
     } catch (error) {
       console.error("[v0] Error processing Excel:", error)
-      alert("Error al procesar el archivo Excel")
+      alert(error instanceof Error ? error.message : "Error al procesar el archivo Excel")
     } finally {
       setIsUploadingExcel(false)
     }
@@ -313,7 +369,8 @@ export function CatalogoProductos() {
     const numValue = Number(value)
     if (isNaN(numValue) || numValue < 0) {
       setValidationErrors((prev) => ({
-        fieldName: "Entrada Inválida: Números Negativos o Letras.",
+        ...prev,
+        [fieldName]: "Entrada Inválida: Números Negativos o Letras.",
       }))
       return false
     }
@@ -359,7 +416,7 @@ export function CatalogoProductos() {
       const productData = {
         nombre: formData.nombre,
         tipo: formData.tipo || null,
-        categoria: null, // La categoría se calculará después
+        categoria: null,
         ubicacion: formData.ubicacion || null,
         proveedor: formData.proveedor || null,
         nro_lotes: nroLotes,
@@ -385,11 +442,11 @@ export function CatalogoProductos() {
 
       console.log("[v0] Product added successfully:", data)
 
-      await recalcularCategoriasABC() // Recalcular categorías después de agregar
+      await recalcularCategoriasABC()
 
       alert("Producto agregado exitosamente")
       setShowAddDialog(false)
-      loadProductos() // Recargar la lista de productos
+      loadProductos()
       resetForm()
     } catch (error) {
       console.error("[v0] Error adding product:", error)
@@ -401,50 +458,41 @@ export function CatalogoProductos() {
     const supabase = createClient()
 
     try {
-      // Obtener todos los productos con sus valores
       const { data: productosData, error } = await supabase.from("productos").select("*")
 
       if (error) throw error
       if (!productosData || productosData.length === 0) return
 
-      // Calcular el valor total de cada producto
       const productosConValor = productosData.map((p) => ({
         id: p.id,
         valor: (p.nro_lotes || 0) * (p.tamanio_lote || 0) * (p.costo_unitario || 0),
       }))
 
-      // Ordenar por valor descendente
       productosConValor.sort((a, b) => b.valor - a.valor)
 
-      // Calcular el valor total de todos los productos
       const valorTotal = productosConValor.reduce((sum, p) => sum + p.valor, 0)
 
-      // Asignar categorías según el método ABC
       let valorAcumulado = 0
       const updates = []
 
       for (const producto of productosConValor) {
         valorAcumulado += producto.valor
-        const porcentajeAcumulado = valorTotal === 0 ? 0 : (valorAcumulado / valorTotal) * 100 // Evitar división por cero
+        const porcentajeAcumulado = valorTotal === 0 ? 0 : (valorAcumulado / valorTotal) * 100
 
         let categoria = "C"
         if (porcentajeAcumulado <= 80) {
-          // Primeros productos que representan el 80% del valor → Categoría A
           categoria = "A"
         } else if (porcentajeAcumulado <= 95) {
-          // Siguientes productos que representan el 15% del valor → Categoría B
           categoria = "B"
         }
-        // El resto (últimos 5%) → Categoría C
 
         updates.push(supabase.from("productos").update({ categoria }).eq("id", producto.id))
       }
 
-      // Ejecutar todas las actualizaciones
       await Promise.all(updates)
 
       console.log("[v0] Categorías ABC recalculadas exitosamente")
-      loadProductos() // Recargar la lista para reflejar las nuevas categorías
+      loadProductos()
     } catch (error) {
       console.error("[v0] Error recalculando categorías ABC:", error)
     }
@@ -466,7 +514,6 @@ export function CatalogoProductos() {
       entrada: "",
       imagen: "",
     })
-    // Resetear errores de validación al resetear el formulario
     setValidationErrors({
       nro_lotes: "",
       tamanio_lote: "",
@@ -539,13 +586,12 @@ export function CatalogoProductos() {
 
       if (error) throw error
 
-      await recalcularCategoriasABC() // Recalcular categorías después de editar
+      await recalcularCategoriasABC()
 
       alert("Producto actualizado exitosamente")
       setIsEditMode(false)
       await loadProductos()
 
-      // Actualizar el producto seleccionado con los nuevos datos
       const { data: updatedProduct } = await supabase
         .from("productos")
         .select("*")
@@ -584,7 +630,7 @@ export function CatalogoProductos() {
 
       if (error) throw error
 
-      await recalcularCategoriasABC() // Recalcular categorías después de eliminar
+      await recalcularCategoriasABC()
 
       alert("Producto eliminado exitosamente")
       setShowDetailView(false)
@@ -597,6 +643,7 @@ export function CatalogoProductos() {
       setIsLoading(false)
     }
   }
+
 
   if (showDetailView && selectedProducto) {
     return (
@@ -1394,7 +1441,6 @@ export function CatalogoProductos() {
             <DialogTitle>Filtrar Productos</DialogTitle>
           </DialogHeader>
           <div className="space-y-6">
-            {/* Filtro por Tipo */}
             <div>
               <h3 className="font-semibold mb-3">Tipo de Producto</h3>
               <div className="space-y-2">
@@ -1417,7 +1463,6 @@ export function CatalogoProductos() {
               </div>
             </div>
 
-            {/* Filtro por Categoría ABC */}
             <div>
               <h3 className="font-semibold mb-3">Categoría ABC</h3>
               <div className="space-y-2">
@@ -1436,7 +1481,6 @@ export function CatalogoProductos() {
               </div>
             </div>
 
-            {/* Filtro por Proveedor */}
             <div>
               <h3 className="font-semibold mb-3">Proveedor</h3>
               <div className="space-y-2 max-h-40 overflow-y-auto">
@@ -1459,7 +1503,6 @@ export function CatalogoProductos() {
               </div>
             </div>
 
-            {/* Filtro por Ubicación */}
             <div>
               <h3 className="font-semibold mb-3">Ubicación</h3>
               <div className="space-y-2 max-h-40 overflow-y-auto">
@@ -1513,9 +1556,9 @@ export function CatalogoProductos() {
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Sube un archivo Excel (.xlsx) con las columnas: nombre, categoria, ubicacion, proveedor, nro_lotes,
+              Sube un archivo Excel (.xlsx) con las columnas: nombre, tipo, ubicacion, proveedor, nro_lotes,
               tamanio_lote, cantidad_disponible, umbral_minimo, umbral_maximo, costo_unitario, fecha_expiracion,
-              entrada, imagen_url
+              entrada, imagen (URL de la imagen)
             </p>
             <div className="border-2 border-dashed rounded-lg p-8 text-center">
               <input

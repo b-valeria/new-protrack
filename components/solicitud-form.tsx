@@ -35,42 +35,58 @@ export function SolicitudForm({ productos, tipo, onSuccess, onCancel }) {
       const producto = productos.find((p) => p.id === formData.producto_id)
       if (!producto) throw new Error("Producto no encontrado")
 
+      const solicitudData = {
+        tipo_solicitud: tipo,
+        producto_id: formData.producto_id,
+        nombre_producto: producto.nombre,
+        cantidad_solicitada: Number(formData.cantidad_solicitada),
+        motivo: formData.motivo,
+        solicitado_por: user.id,
+        estado: "Pendiente",
+      }
+
+      if (tipo === "Traslado" && formData.sede_origen && formData.sede_destino) {
+        solicitudData.motivo = `${formData.motivo}\nOrigen: ${formData.sede_origen}\nDestino: ${formData.sede_destino}`
+      } else if (tipo === "Donación") {
+        solicitudData.motivo = `Organización: ${formData.organizacion_receptora}\nSede de salida: ${formData.sede_salida}${formData.motivo ? '\nMotivo: ' + formData.motivo : ''}`
+      }
+
+      const { data: solicitudInsertada, error: insertError } = await supabase
+        .from("solicitudes")
+        .insert(solicitudData)
+        .select()
+        .single()
+
+      if (insertError) {
+        console.error("[v0] Error insertando solicitud:", insertError)
+        throw new Error(`Error al crear solicitud: ${insertError.message}`)
+      }
+
       if (tipo === "Donación") {
-        const { error: insertError } = await supabase.from("donaciones").insert({
+        const donacionData = {
+          producto_id: formData.producto_id,
           nombre_producto: producto.nombre,
           cantidad_donada: Number(formData.cantidad_solicitada),
           sede_salida: formData.sede_salida,
           organizacion_receptora: formData.organizacion_receptora,
+          fecha: new Date().toISOString(),
           estado: "Pendiente",
           solicitado_por: user.id,
-        })
-
-        if (insertError) throw insertError
-      } else {
-        const solicitudData = {
-          tipo_solicitud: tipo,
-          producto_id: formData.producto_id,
-          nombre_producto: producto.nombre,
-          cantidad_solicitada: Number(formData.cantidad_solicitada),
-          motivo: formData.motivo,
-          solicitado_por: user.id,
-          estado: "Pendiente",
         }
 
-        // Si es traslado, agregar información adicional en el motivo
-        if (tipo === "Traslado" && formData.sede_origen && formData.sede_destino) {
-          solicitudData.motivo = `${formData.motivo}\nOrigen: ${formData.sede_origen}\nDestino: ${formData.sede_destino}`
+        const { error: donacionError } = await supabase.from("donaciones").insert(donacionData)
+
+        if (donacionError) {
+          console.error("[v0] Error insertando donación:", donacionError)
+          throw new Error(`Error al registrar donación: ${donacionError.message}`)
         }
-
-        const { error: insertError } = await supabase.from("solicitudes").insert(solicitudData)
-
-        if (insertError) throw insertError
       }
 
       if (onSuccess) {
         onSuccess()
       }
     } catch (error) {
+      console.error("[v0] Error en handleSubmit:", error)
       setError(error instanceof Error ? error.message : "Error al crear solicitud")
     } finally {
       setIsLoading(false)
